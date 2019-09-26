@@ -97,4 +97,5 @@ resource "vault_generic_secret" "example" {
   "broccoli": "kale"
 }
 EOT
+depends_on = [vault_mount.example]
 }
