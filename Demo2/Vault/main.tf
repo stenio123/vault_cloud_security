@@ -13,6 +13,22 @@ provider "vault" {
   token   = var.vault_token
 }
 
+data "template_file" "vault_aws_auth_policy_template" {
+  template = file("${path.module}/vault_iam_policy.json.tpl")
+
+  vars = {
+    aws_account_id = "${var.aws_account_id}"
+  }
+}
+
+data "template_file" "dynamic_user_policy_template" {
+  template = file("${path.module}/dynamic_user_iam_policy.json.tpl")
+
+  vars = {
+    bucket_arn = "${aws_s3_bucket.s3.arn}"
+  }
+}
+
 # Enable auth backend
 resource "vault_auth_backend" "userpass" {
   type = "userpass"
@@ -44,13 +60,6 @@ EOT
 }
 
 # Create AWS credential for Vault
-data "template_file" "vault_aws_auth_policy_template" {
-  template = file("${path.module}/vault_iam_policy.json.tpl")
-
-  vars = {
-    aws_account_id = "${var.aws_account_id}"
-  }
-}
 
 resource "aws_iam_user" "vault_demo_user" {
   name = "vault_demo2_user_stenio"
@@ -77,35 +86,7 @@ resource "vault_aws_secret_backend_role" "role" {
   name    = "s3_access"
   credential_type = "iam_user"
 
-  policy_document = <<EOT
-{
-  "Version": "2012-10-17",
-  "Statement": [
-    {
-      "Effect": "Allow",
-      "Action": [
-        "s3:GetBucketLocation",
-        "s3:ListAllMyBuckets"
-      ],
-      "Resource": "*"
-    },
-    {
-      "Effect": "Allow",
-      "Action": ["s3:ListBucket"],
-      "Resource": ["arn:aws:s3:::test"]
-    },
-    {
-      "Effect": "Allow",
-      "Action": [
-        "s3:PutObject",
-        "s3:GetObject",
-        "s3:DeleteObject"
-      ],
-      "Resource": ["${aws_s3_bucket.s3.arn}"]
-    }
-  ]
-}
-EOT
+  policy_document = data.template_file.dynamic_user_policy_template.rendered
 }
 
 resource "aws_s3_bucket" "s3" {
